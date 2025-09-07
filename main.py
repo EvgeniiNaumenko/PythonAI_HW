@@ -1,103 +1,102 @@
 import numpy as np
 
-# ===== Завдання 1 =====
-arr1 = np.random.randint(0, 51, 20)          # 20 випадкових чисел 0..50
-print("Вихідний масив:", arr1)
+# ===== № 1 =====
+arr1 = np.random.randint(0, 51, 20)
+print("Массив:", arr1)
 
-threshold = int(input("Введіть порогове значення: "))
+threshold = int(input("Введите порогове значение: "))
 greater_count = np.sum(arr1 > threshold)
-print("Кількість елементів > порогу:", greater_count)
+print("Больше > порога:", greater_count)
 
 max_val = np.max(arr1)
 first_idx = np.argmax(arr1)
-print(f"Максимум: {max_val}, позиція першої появи: {first_idx}")
+print(f"Максимум: {max_val}, 1я позиция: {first_idx}")
 
 sorted_desc = np.sort(arr1)[::-1]
-print("Масив за спаданням:", sorted_desc)
+print("Массив на убівание:", sorted_desc)
 
 
-# ===== Завдання 2 =====
-low = int(input("Введіть нижню межу діапазону: "))
-high = int(input("Введіть верхню межу діапазону: "))
+# ===== № 2 =====
+low = int(input("Введите нижнюю границу: "))
+high = int(input("Введите верхнюю границу: "))
 matrix2 = np.random.randint(low, high + 1, (5, 5))
-print("Вихідна матриця:\n", matrix2)
+print("Матрица:\n", matrix2)
 
 diag = np.diag(matrix2)
-print("Головна діагональ:", diag)
-print("Сума головної діагоналі:", np.sum(diag))
+print("Главная диагональ:", diag)
+print("Сумма главной диагонали:", np.sum(diag))
 
-# обнулити елементи вище діагоналі
 matrix2_mod = matrix2.copy()
 matrix2_mod[np.triu_indices(5, k=1)] = 0
-print("Матриця після занулення елементів вище діагоналі:\n", matrix2_mod)
+print("матрица после обнуления диагонали:\n", matrix2_mod)
 
 
-# ===== Завдання 3 =====
-start = int(input("Початок діапазону: "))
-end = int(input("Кінець діапазону: "))
+# ===== № 3 =====
+start = int(input("Начало диапазона: "))
+end = int(input("Конец диапазона: "))
 seq = np.arange(start, end + 1)
-if seq.size < 30:  # на всякий випадок, щоб було 6×5
-    raise ValueError("Діапазон повинен містити щонайменше 30 чисел")
+if seq.size < 30:
+    raise ValueError("Диапазон минимум 30")
 matrix3 = seq[:30].reshape(6, 5)
-print("Матриця 6×5:\n", matrix3)
+print("Матрица 6×5:\n", matrix3)
 
 row_sums = np.sum(matrix3, axis=1)
-print("Сума по рядках:", row_sums)
+print("Сумма по строках:", row_sums)
 
 col_max = np.max(matrix3, axis=0)
-print("Максимуми по стовпцях:", col_max)
+print("Максимумы по столбцах:", col_max)
 
 
-# ===== Завдання 4 =====
-low4 = int(input("Введіть нижню межу (можна від’ємну): "))
-high4 = int(input("Введіть верхню межу: "))
+# ===== № 4 =====
+low4 = int(input("Введите нижнюю границу: "))
+high4 = int(input("Введите верхнюю границу: "))
 arr4 = np.random.randint(low4, high4 + 1, 15)
-print("Вихідний масив:", arr4)
+print("Массив:", arr4)
 
 negatives = arr4[arr4 < 0]
-print("Від’ємні елементи:", negatives)
+print("Отрицательные элементы:", negatives)
 
 arr4_mod = arr4.copy()
 arr4_mod[arr4_mod < 0] = 0
-print("Масив після заміни від’ємних на нулі:", arr4_mod)
+print("Отрицательные на нули:", arr4_mod)
 
 zero_count = np.sum(arr4_mod == 0)
-print("Кількість нульових елементів:", zero_count)
+print("Количестку нулевых:", zero_count)
 
 
-# ===== Завдання 5 =====
-length = int(input("Введіть довжину масивів: "))
+# ===== № 5 =====
+length = int(input("Введите длину массивов: "))
 arr5_a = np.random.randint(0, 11, length)
 arr5_b = np.random.randint(10, 21, length)
-print("Перший масив:", arr5_a)
-print("Другий масив:", arr5_b)
+print("Первый масив:", arr5_a)
+print("ДругийВторой масив:", arr5_b)
 
 merged = np.concatenate((arr5_a, arr5_b))
-print("Об’єднаний масив:", merged)
+print("Обьедененный массив:", merged)
 
 sum_arr = arr5_a + arr5_b
 diff_arr = arr5_a - arr5_b
-print("Поелементне додавання:", sum_arr)
-print("Поелементна різниця:", diff_arr)
+print("Сумма:", sum_arr)
+print("Разница:", diff_arr)
 
 
-# ===== Завдання 6 =====
-rows = int(input("Кількість рядків вихідної матриці: "))
-cols = int(input("Кількість стовпців вихідної матриці: "))
+# ===== № 6 =====
+rows = int(input("Количество строк: "))
+cols = int(input("Количество столбцов: "))
 matrix6 = np.arange(1, rows * cols + 1).reshape(rows, cols)
-print("Вихідна матриця:\n", matrix6)
+print("Матрица:\n", matrix6)
 
-new_rows = int(input("Нова кількість рядків: "))
-new_cols = int(input("Нова кількість стовпців: "))
+new_rows = int(input("Новое количество строк: "))
+new_cols = int(input("Новое количество столбцов: "))
 if new_rows * new_cols != rows * cols:
-    raise ValueError("Кількість елементів повинна збігатися!")
+    raise ValueError("Не совпадает количество элементов")
 matrix6_new = matrix6.reshape(new_rows, new_cols)
-print("Перетворена матриця:\n", matrix6_new)
+print("Матрица:\n", matrix6_new)
 
 row_min = np.min(matrix6_new, axis=1)
 row_max = np.max(matrix6_new, axis=1)
-print("Мінімальні по рядках:", row_min)
-print("Максимальні по рядках:", row_max)
+print("Минимум по строках:", row_min)
+print("МаксимМаксимум по строках:", row_max)
 
 total_sum = np.sum(matrix6_new)
-print("Сума всіх елементів:", total_sum)
+print("Сумма:", total_sum)
