@@ -9,8 +9,8 @@ import requests
 import json
 from dotenv import load_dotenv
 
-from gtts import gTTS # озвучка
-import tempfile
+# from gtts import gTTS # озвучка
+# import tempfile
 
 load_dotenv()
 
