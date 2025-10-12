@@ -1,172 +1,320 @@
-import numpy as np
-from sklearn.datasets import fetch_openml
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
+import os
+import platform
+import subprocess
+import random
+import pyttsx3
+import speech_recognition as sr
+from datetime import datetime
+import requests
+import json
+from dotenv import load_dotenv
 
-# ==========================
-#   Перцептрон
-# ==========================
-class Perceptron:
-    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.01):
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.output_size = output_size
-        self.learning_rate = learning_rate
+from gtts import gTTS # озвучка
+import tempfile
 
-        # Xavier initialization
-        self.W1 = np.random.randn(self.input_size, self.hidden_size) * np.sqrt(1. / self.input_size)
-        self.b1 = np.zeros((1, self.hidden_size))
-        self.W2 = np.random.randn(self.hidden_size, self.output_size) * np.sqrt(1. / self.hidden_size)
-        self.b2 = np.zeros((1, self.output_size))
+load_dotenv()
 
-        self.loss_history = []
-        self.accuracy_history = []
+# ========== КЛЮЧ ДО GROQ ==========
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY") or ""
+if not GROQ_API_KEY:
+    raise RuntimeError("GROQ_API_KEY is not set")
 
-    def predict(self, X):
-        y_pred = self.forward_propagation(X)
-        return np.argmax(y_pred, axis=1)
+# ========== Глобальні налаштування ==========
+MODEL = "llama-3.3-70b-versatile"  # Актуальний
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-    def sigmoid(self, z):
-        z = np.clip(z, -500, 500)
-        return 1 / (1 + np.exp(-z))
+VOICE_GENDER = "female"  # "female" або "male"
+VOICE_VOLUME = 1.0  # 0.0 - 1.0
+VOICE_RATE = 150  # Темп (звук/хв)
 
-    def softmax(self, z):
-        exp_z = np.exp(z - np.max(z, axis=1, keepdims=True))
-        return exp_z / np.sum(exp_z, axis=1, keepdims=True)
+# ========== Команди-активатори ==========
+JOKES = [
+    "Йде студент по коридору, бачить — сесія. І ховається.",
+    "Програміст — це машина для перетворення кави в код.",
+    "Песиміст бачить темряву в тунелі, оптиміст — світло, інженер — потяг, машиніст — двох дурнів на рейках."
+]
 
-    def forward_propagation(self, X):
-        self.Z1 = np.dot(X, self.W1) + self.b1
-        self.A1 = self.sigmoid(self.Z1)
-        self.Z2 = np.dot(self.A1, self.W2) + self.b2
-        self.A2 = self.softmax(self.Z2)
-        return self.A2
+TIPS = [
+    "Не забувай робити паузи під час роботи за комп’ютером.",
+    "Пий більше води, твій мозок буде вдячний.",
+    "Ніколи не бійся пробувати щось нове — так з’являється досвід."
+]
 
-    def compute_loss(self, y_true, y_pred):
-        m = y_true.shape[0]
-        espilon = 1e-15
-        y_pred = np.clip(y_pred, espilon, 1 - espilon)
-        loss = -np.sum(y_true * np.log(y_pred)) / m
-        return loss
+# Лог файлу для збереження розмов
+LOG_FILE = "jarvis_log.json"
 
-    def sigmoid_derivative(self, A):
-        return A * (1 - A)
-
-    def backward_propagation(self, X, y_true, y_pred):
-        m = X.shape[0]
-        dZ2 = y_pred - y_true
-        dW2 = np.dot(self.A1.T, dZ2) / m
-        db2 = np.sum(dZ2, axis=0, keepdims=True) / m
-
-        dA1 = np.dot(dZ2, self.W2.T)
-        dZ1 = dA1 * self.sigmoid_derivative(self.A1)
-        dW1 = np.dot(X.T, dZ1) / m
-        db1 = np.sum(dZ1, axis=0, keepdims=True) / m
-
-        # обновляем веса
-        self.W2 -= self.learning_rate * dW2
-        self.b2 -= self.learning_rate * db2
-        self.W1 -= self.learning_rate * dW1
-        self.b1 -= self.learning_rate * db1
-
-    def caluclate_accuracy(self, y_true, y_pred):
-        y_true_labels = np.argmax(y_true, axis=1)
-        y_pred_labels = np.argmax(y_pred, axis=1)
-        return np.mean(y_true_labels == y_pred_labels)
-
-    def train(self, X_train, y_train, X_val, y_val, epochs=500, verbose=True):
-        for epoch in range(epochs):
-            y_pred_train = self.forward_propagation(X_train)
-            loss = self.compute_loss(y_train, y_pred_train)
-            self.loss_history.append(loss)
-
-            self.backward_propagation(X_train, y_train, y_pred_train)
-
-            if epoch % 50 == 0:
-                val_pred = self.forward_propagation(X_val)
-                val_accuracy = self.caluclate_accuracy(y_val, val_pred)
-                self.accuracy_history.append(val_accuracy)
-                if verbose:
-                    print(f"Эпоха {epoch+1}/{epochs} - Втрата: {loss:.4f} - Вал. точність: {val_accuracy:.4f}")
+COMMANDS = {
+    "яка година": lambda: f"Зараз {datetime.now().strftime('%H:%M')}",
+    "яка дата": lambda: f"Сьогодні {datetime.now().strftime('%d.%m.%Y')}",
+    "анекдот": lambda: random.choice(JOKES),
+    "порада дня": lambda: random.choice(TIPS),
+}
 
 
-# ==========================
-#   Утилиты
-# ==========================
-def one_hot_encode(y, num_classes):
-    one_hot = np.zeros((y.shape[0], num_classes))
-    one_hot[np.arange(y.shape[0]), y] = 1
-    return one_hot
-
-def load_and_prepare_data():
-    print("Завантаження даних (letters A–Z)...")
-    letters = fetch_openml("letter", version=1, as_frame=False)
-    X, y = letters.data, letters.target
-
-    # Преобразуем буквы в числа
-    le = LabelEncoder()
-    y = le.fit_transform(y)  # A=0, ..., Z=25
-
-    # train/val/test
-    X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=0.25, random_state=42)
-
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_val = scaler.transform(X_val)
-    X_test = scaler.transform(X_test)
-
-    num_classes = 26
-    y_train_onehot = one_hot_encode(y_train, num_classes)
-    y_val_onehot = one_hot_encode(y_val, num_classes)
-    y_test_onehot = one_hot_encode(y_test, num_classes)
-
-    return X_train, y_train_onehot, X_val, y_val_onehot, X_test, y_test_onehot, y_test, scaler, le
-
-def evaluate_model(model, X_test, y_test_onehot, y_test_labels, le):
-    y_pred = model.forward_propagation(X_test)
-    test_accuracy = model.caluclate_accuracy(y_test_onehot, y_pred)
-    print(f"\nТочність на тестовому наборі: {test_accuracy:.4f}")
-
-    y_pred_labels = np.argmax(y_pred, axis=1)
-
-    print("\nЗвіт про класифікацію:")
-    print(classification_report(y_test_labels, y_pred_labels, target_names=le.classes_))
-
-    cm = confusion_matrix(y_test_labels, y_pred_labels)
-    plt.figure(figsize=(12, 10))
-    sns.heatmap(cm, annot=False, cmap='Blues', xticklabels=le.classes_, yticklabels=le.classes_)
-    plt.xlabel('Передбачені мітки')
-    plt.ylabel('Справжні мітки')
-    plt.title('Матриця плутанини (A-Z)')
-    plt.show()
+# ========= Логування ==========
+def log_conversation(user_text, assistant_text):
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "user": user_text,
+        "assistant": assistant_text
+    }
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+def show_history(n=3):
+    # Зчитуємо останні n записів і повертаємо їх текстом
+    if not os.path.exists(LOG_FILE):
+        return "Історія розмов поки що порожня."
 
+    with open(LOG_FILE, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    last_entries = lines[-n:]
+    history_text = ""
+    for line in last_entries:
+        try:
+            entry = json.loads(line)
+            ts = entry.get("timestamp", "")
+            user = entry.get("user", "")
+            assistant = entry.get("assistant", "")
+            history_text += f"\n[{ts}]\nТи: {user}\nДжарвіс: {assistant}\n"
+        except:
+            continue
+
+    return history_text if history_text else "Історія розмов поки що порожня."
+
+
+# ========== Озвучка ==========
+def init_tts_engine():
+    engine = pyttsx3.init()
+    voices = engine.getProperty('voices')
+
+    print("\n🎙️ Доступні голоси:")
+    for i, voice in enumerate(voices):
+        print(f"{i}: {voice.name} - {voice.id}")
+
+    # Встановлюємо голос за заданим VOICE_GENDER, якщо не знайшли, лишаємо дефолтний
+    selected_voice_id = None
+    for voice in voices:
+        # Часткова перевірка по gender (можна зробити краще)
+        name_lower = voice.name.lower()
+        if VOICE_GENDER == "female" and "female" in name_lower:
+            selected_voice_id = voice.id
+            break
+        elif VOICE_GENDER == "male" and "male" in name_lower:
+            selected_voice_id = voice.id
+            break
+
+    if selected_voice_id:
+        engine.setProperty('voice', selected_voice_id)
+
+    engine.setProperty('volume', VOICE_VOLUME)
+    engine.setProperty('rate', VOICE_RATE)
+    return engine
+
+
+def speak_ua(text):
+    engine = init_tts_engine()
+    engine.say(text)
+    engine.runAndWait()
+
+# def play_audio(path):
+#     system = platform.system()
+#     try:
+#         if system == "Darwin":
+#             subprocess.run(["afplay", path])
+#         elif system == "Windows":
+#             os.startfile(path)
+#         else:
+#             subprocess.run(["mpg123", path])
+#     except Exception as e:
+#         print(f"Error playing audio: {e}")
+#
+# def speak_ua(text):
+#     if not text:
+#         return
+#     try:
+#         tts = gTTS(text=text, lang="uk")
+#         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as fp:
+#             path = fp.name
+#         tts.save(path)
+#         play_audio(path)
+#         # close player
+#         # kill process
+#         os.remove(path)
+#     except Exception as e:
+#         print("Не вдалось озвучити!", e)
+
+
+# Функція оновлення гучності в рамках запущеного движка (якщо потрібно)
+def change_volume(new_volume):
+    global VOICE_VOLUME
+    VOICE_VOLUME = min(max(new_volume, 0.0), 1.0)
+    print(f"🔊 Гучність встановлено на {VOICE_VOLUME}")
+    # Можна додати логіку оновлення движка, якщо він в глобальній змінній
+
+
+# ========== Вибір голосу ==========
+def choose_voice_settings():
+    global VOICE_GENDER, VOICE_VOLUME, VOICE_RATE
+
+    print("\n🎙️ Обери голос:")
+    print("1. 👩 Жіночий")
+    print("2. 👨 Чоловічий")
+    choice = input("Вибір (1/2): ").strip()
+    VOICE_GENDER = "female" if choice == "1" else "male"
+
+    vol = input("🔊 Введи гучність (0.0 до 1.0, за замовчуванням 1.0): ").strip()
+    try:
+        VOICE_VOLUME = min(max(float(vol), 0.0), 1.0)
+    except:
+        VOICE_VOLUME = 1.0
+
+    rate = input("🚀 Введи швидкість мови (типово 150): ").strip()
+    try:
+        VOICE_RATE = int(rate)
+    except:
+        VOICE_RATE = 150
+
+
+# ========== Розпізнавання голосу ==========
+def choose_microphone():
+    print("\n🎤 Доступні мікрофони:")
+    for idx, name in enumerate(sr.Microphone.list_microphone_names()):
+        print(f"{idx}: {name}")
+    try:
+        index = int(input("Введи номер мікрофона: "))
+        return index
+    except:
+        print("❌ Невірний ввід. Використовується мікрофон за замовчуванням.")
+        return None
+
+
+def listen_ukrainian(device_index=None, timeout=5, phrase_time_limit=20):
+    r = sr.Recognizer()
+    with sr.Microphone(device_index=device_index) as source:
+        print("🎧 Говори щось українською...")
+        r.adjust_for_ambient_noise(source, duration=0.8)
+        try:
+            audio = r.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
+            text = r.recognize_google(audio, language="uk-UA")
+            print("🗣️ Ти сказав(ла):", text)
+            return text
+        except sr.WaitTimeoutError:
+            print("⌛ Тайм-аут: нічого не почуто.")
+        except Exception as err:
+            print("❌ Помилка розпізнавання:", err)
+    return None
+
+
+# ========== Запит до GROQ ==========
+def ask_groq(prompt, history=None):
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    messages = [
+        {"role": "system", "content": "Ти — розумний, доброзичливий український асистент. Відповідай чітко й просто."}
+    ]
+
+    if history:
+        messages += history[-10:]  # останні 10 повідомлень
+
+    messages.append({"role": "user", "content": prompt})
+
+    payload = {
+        "model": MODEL,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 500,
+        "stream": False
+    }
+
+    try:
+        res = requests.post(GROQ_URL, headers=headers, json=payload)
+        if res.status_code != 200:
+            print(f"❌ Помилка API: {res.status_code} {res.text}")
+            return "Вибач, сталася помилка при зверненні до ШІ."
+        data = res.json()
+        return data["choices"][0]["message"]["content"]
+    except Exception as err:
+        print("❌ Запит не вдалось виконати:", err)
+        return "На жаль, не вдалося отримати відповідь від ШІ."
+
+
+# ========== Головна функція ==========
 def main():
-    print(" -- ПЕРЦЕПТРОН ДЛЯ РОЗПІЗНАВАННЯ БУКВ --")
-    X_train, y_train, X_val, y_val, X_test, y_test_onehot, y_test_labels, scaler, le = load_and_prepare_data()
+    print("👋 Привіт! Я Джарвіс — твій голосовий помічник.")
+    choose_voice_settings()
+    mic_index = choose_microphone()
+    conversation_history = []
 
-    input_size = X_train.shape[1]   # 16x16=256
-    hidden_size = 128
-    output_size = 26
-    learning_rate = 0.1
+    try:
+        while True:
+            query = listen_ukrainian(device_index=mic_index)
+            if not query:
+                continue
 
-    perceptron = Perceptron(input_size, hidden_size, output_size, learning_rate)
-    perceptron.train(X_train, y_train, X_val, y_val, epochs=2000, verbose=True)
+            query_l = query.lower().strip()
 
-    evaluate_model(perceptron, X_test, y_test_onehot, y_test_labels, le)
+            # Вихід
+            if query_l in ["вийти", "дякую", "завершити", "стоп"]:
+                print("👋 Бувай!")
+                speak_ua("Бувай!")
+                break
 
-    # Примеры предсказаний
-    preds = perceptron.predict(X_test[:20])
-    print("\nПриклади передбачень:")
-    for i, p in enumerate(preds):
-        print(f"Зразок {i+1}: {le.inverse_transform([y_test_labels[i]])[0]} -> {le.inverse_transform([p])[0]}")
+            # Команда показати історію
+            if query_l == "покажи історію":
+                history_text = show_history(n=3)
+                print(history_text)
+                speak_ua(history_text)
+                continue
 
-    return perceptron
+            # Команда зміни гучності (наприклад: "гучність 0.7")
+            if query_l.startswith("гучність"):
+                parts = query_l.split()
+                if len(parts) == 2:
+                    try:
+                        vol = float(parts[1])
+                        change_volume(vol)
+                        speak_ua(f"Гучність встановлено на {vol}")
+                    except ValueError:
+                        speak_ua("Невірне значення гучності.")
+                else:
+                    speak_ua("Скажи 'гучність' та число від 0 до 1.")
+                continue
 
+            # Інші команди
+            if query_l in COMMANDS:
+                answer = COMMANDS[query_l]()
+                print("🧭 Команда:", query_l)
+                print("📤 Відповідь:", answer)
+                speak_ua(answer)
+                # Логування
+                log_conversation(query, answer)
+                continue
+
+            # Запит до ШІ
+            print("🤖 Думаю...")
+            answer = ask_groq(query, history=conversation_history)
+            print("📤 Відповідь:", answer)
+
+            conversation_history.append({"role": "user", "content": query})
+            conversation_history.append({"role": "assistant", "content": answer})
+            conversation_history = conversation_history[-20:]
+
+            speak_ua(answer)
+            # Логування
+            log_conversation(query, answer)
+
+    except KeyboardInterrupt:
+        print("\n🛑 Вихід через Ctrl+C. До зустрічі!")
+        speak_ua("До зустрічі!")
+
+
+
+# ========== Точка входу ==========
 if __name__ == "__main__":
-    model = main()
-
+    main()
